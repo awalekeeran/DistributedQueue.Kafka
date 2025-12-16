@@ -1,0 +1,28 @@
+# Ignore files for Docker build context
+.git
+.gitignore
+.vs
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Build output
+**/bin/
+**/obj/
+**/out/
+
+# NuGet
+*.nupkg
+**/packages/
+
+# Documentation
+*.md
+!README.md
+
+# Docker files
+docker-compose*.yml
+Dockerfile*
+.dockerignore
