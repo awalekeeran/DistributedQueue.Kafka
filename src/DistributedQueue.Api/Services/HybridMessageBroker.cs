@@ -22,17 +22,20 @@ public interface IHybridMessageBroker
 public class HybridMessageBroker : IHybridMessageBroker
 {
     private readonly IMessageBroker _inMemoryBroker;
+    private readonly ITopicManager _topicManager;
     private readonly IKafkaProducerService? _kafkaProducer;
     private readonly QueueModeSettings _queueMode;
     private readonly ILogger<HybridMessageBroker> _logger;
 
     public HybridMessageBroker(
         IMessageBroker inMemoryBroker,
+        ITopicManager topicManager,
         IOptions<QueueModeSettings> queueMode,
         ILogger<HybridMessageBroker> logger,
         IKafkaProducerService? kafkaProducer = null)
     {
         _inMemoryBroker = inMemoryBroker;
+        _topicManager = topicManager;
         _kafkaProducer = kafkaProducer;
         _queueMode = queueMode.Value;
         _logger = logger;
@@ -43,16 +46,26 @@ public class HybridMessageBroker : IHybridMessageBroker
     public async Task PublishMessageAsync(string producerId, string topicName, string content)
     {
         var message = new Message(content, topicName, producerId);
-
         var tasks = new List<Task>();
+        var publishedTo = new List<string>();
 
         // Publish to in-memory queue if enabled
         if (_queueMode.UseInMemory)
         {
-            _logger.LogInformation("📦 Publishing to IN-MEMORY queue: Topic={Topic}, MessageId={MessageId}", 
-                topicName, message.Id);
-            
-            _inMemoryBroker.PublishMessage(topicName, message);
+            // Check if topic exists in in-memory before publishing
+            var topic = _topicManager.GetTopic(topicName);
+            if (topic != null)
+            {
+                _logger.LogInformation("📦 Publishing to IN-MEMORY queue: Topic={Topic}, MessageId={MessageId}", 
+                    topicName, message.Id);
+                
+                _inMemoryBroker.PublishMessage(topicName, message);
+                publishedTo.Add("In-Memory");
+            }
+            else
+            {
+                _logger.LogWarning("⚠️ Topic '{Topic}' does not exist in in-memory storage. Skipping in-memory publish.", topicName);
+            }
         }
 
         // Publish to Kafka if enabled
@@ -62,6 +75,13 @@ public class HybridMessageBroker : IHybridMessageBroker
                 topicName, message.Id);
             
             tasks.Add(_kafkaProducer.PublishMessageAsync(topicName, message));
+            publishedTo.Add("Kafka");
+        }
+
+        // Validate that at least one backend is available
+        if (!publishedTo.Any() && !tasks.Any())
+        {
+            throw new InvalidOperationException($"Topic '{topicName}' does not exist in any configured backend (In-Memory: {_queueMode.UseInMemory}, Kafka: {_queueMode.UseKafka})");
         }
 
         // Wait for all async operations
@@ -70,8 +90,14 @@ public class HybridMessageBroker : IHybridMessageBroker
             await Task.WhenAll(tasks);
         }
 
+        // Log success
+        if (publishedTo.Count > 0)
+        {
+            _logger.LogInformation("✅ Message published successfully to: {Backends}", string.Join(", ", publishedTo));
+        }
+
         // Log hybrid mode
-        if (_queueMode.EnableHybridMode && _queueMode.UseInMemory && _queueMode.UseKafka)
+        if (_queueMode.EnableHybridMode && publishedTo.Contains("In-Memory") && publishedTo.Contains("Kafka"))
         {
             _logger.LogInformation("✅ HYBRID: Message published to BOTH in-memory and Kafka!");
         }
