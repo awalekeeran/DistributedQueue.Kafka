@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DistributedQueue.Core\DistributedQueue.Core.csproj" />
+    <ProjectReference Include="..\DistributedQueue.Kafka\DistributedQueue.Kafka.csproj" />
   </ItemGroup>
 
 </Project>

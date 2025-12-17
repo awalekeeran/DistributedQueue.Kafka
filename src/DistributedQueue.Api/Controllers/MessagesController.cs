@@ -1,4 +1,5 @@
 using DistributedQueue.Api.DTOs;
+using DistributedQueue.Api.Services;
 using DistributedQueue.Core.Models;
 using DistributedQueue.Core.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -10,21 +11,21 @@ namespace DistributedQueue.Api.Controllers;
 public class MessagesController : ControllerBase
 {
     private readonly IProducerManager _producerManager;
-    private readonly IMessageBroker _messageBroker;
+    private readonly IHybridMessageBroker _hybridBroker;
     private readonly ILogger<MessagesController> _logger;
 
     public MessagesController(
         IProducerManager producerManager,
-        IMessageBroker messageBroker,
+        IHybridMessageBroker hybridBroker,
         ILogger<MessagesController> logger)
     {
         _producerManager = producerManager;
-        _messageBroker = messageBroker;
+        _hybridBroker = hybridBroker;
         _logger = logger;
     }
 
     [HttpPost("publish")]
-    public IActionResult PublishMessage([FromBody] PublishMessageRequest request)
+    public async Task<IActionResult> PublishMessage([FromBody] PublishMessageRequest request)
     {
         try
         {
@@ -34,10 +35,12 @@ public class MessagesController : ControllerBase
                 return NotFound(new { error = $"Producer '{request.ProducerId}' not found" });
             }
 
-            var message = new Message(request.Content, request.TopicName, request.ProducerId);
-            _messageBroker.PublishMessage(request.TopicName, message);
+            // Use hybrid broker (supports both in-memory and Kafka)
+            await _hybridBroker.PublishMessageAsync(request.ProducerId, request.TopicName, request.Content);
 
-            _logger.LogInformation("Message published to topic '{TopicName}' by producer '{ProducerId}'", 
+            var message = new Message(request.Content, request.TopicName, request.ProducerId);
+
+            _logger.LogInformation("✅ Message published to topic '{TopicName}' by producer '{ProducerId}'", 
                 request.TopicName, request.ProducerId);
 
             return Ok(new 
@@ -46,7 +49,8 @@ public class MessagesController : ControllerBase
                 message.Content, 
                 message.TopicName, 
                 message.ProducerId, 
-                message.Timestamp 
+                message.Timestamp,
+                Status = "Published to configured backend(s)"
             });
         }
         catch (InvalidOperationException ex)

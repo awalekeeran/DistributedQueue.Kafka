@@ -1,6 +1,11 @@
+using DistributedQueue.Api.Configuration;
 using DistributedQueue.Api.DTOs;
 using DistributedQueue.Core.Services;
+using DistributedQueue.Kafka.Configuration;
+using Confluent.Kafka;
+using Confluent.Kafka.Admin;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace DistributedQueue.Api.Controllers;
 
@@ -11,17 +16,23 @@ public class ConsumersController : ControllerBase
     private readonly IConsumerManager _consumerManager;
     private readonly IConsumerGroupManager _consumerGroupManager;
     private readonly IMessageBroker _messageBroker;
+    private readonly QueueModeSettings _queueMode;
+    private readonly KafkaSettings _kafkaSettings;
     private readonly ILogger<ConsumersController> _logger;
 
     public ConsumersController(
         IConsumerManager consumerManager,
         IConsumerGroupManager consumerGroupManager,
         IMessageBroker messageBroker,
+        IOptions<QueueModeSettings> queueMode,
+        IOptions<KafkaSettings> kafkaSettings,
         ILogger<ConsumersController> logger)
     {
         _consumerManager = consumerManager;
         _consumerGroupManager = consumerGroupManager;
         _messageBroker = messageBroker;
+        _queueMode = queueMode.Value;
+        _kafkaSettings = kafkaSettings.Value;
         _logger = logger;
     }
 
@@ -53,20 +64,113 @@ public class ConsumersController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Get all consumers from configured sources (in-memory and/or Kafka consumer group members)
+    /// </summary>
     [HttpGet]
-    public IActionResult GetAllConsumers()
+    public async Task<IActionResult> GetAllConsumers()
     {
-        var consumers = _consumerManager.GetAllConsumers()
-            .Select(c => new 
-            { 
-                c.Id, 
-                c.Name, 
-                c.ConsumerGroup, 
-                c.IsActive, 
-                c.CreatedAt,
-                SubscribedTopics = c.GetSubscribedTopics()
+        var inMemoryConsumers = new List<object>();
+        var kafkaConsumers = new List<object>();
+
+        // Get in-memory consumers
+        if (_queueMode.UseInMemory)
+        {
+            inMemoryConsumers = _consumerManager.GetAllConsumers()
+                .Select(c => new 
+                { 
+                    Id = c.Id, 
+                    Name = c.Name, 
+                    ConsumerGroup = c.ConsumerGroup, 
+                    IsActive = c.IsActive, 
+                    CreatedAt = c.CreatedAt,
+                    SubscribedTopics = c.GetSubscribedTopics(),
+                    Source = "In-Memory"
+                })
+                .Cast<object>()
+                .ToList();
+
+            _logger.LogInformation("Found {Count} in-memory consumers", inMemoryConsumers.Count);
+        }
+
+        // Get Kafka consumers (from consumer groups)
+        if (_queueMode.UseKafka && _kafkaSettings.IsValid())
+        {
+            try
+            {
+                var adminConfig = new AdminClientConfig
+                {
+                    BootstrapServers = _kafkaSettings.BootstrapServers,
+                    SecurityProtocol = Enum.Parse<SecurityProtocol>(_kafkaSettings.SecurityProtocol),
+                    SaslMechanism = Enum.Parse<SaslMechanism>(_kafkaSettings.SaslMechanism),
+                    SaslUsername = _kafkaSettings.SaslUsername,
+                    SaslPassword = _kafkaSettings.SaslPassword
+                };
+
+                using var adminClient = new AdminClientBuilder(adminConfig).Build();
+                var groupsList = adminClient.ListGroups(TimeSpan.FromSeconds(10));
+
+                // Extract all members from all consumer groups
+                kafkaConsumers = groupsList
+                    .Where(g => g.Members != null && g.Members.Count > 0)
+                    .SelectMany(g => g.Members.Select(m => new
+                    {
+                        Id = m.MemberId,
+                        ClientId = m.ClientId,
+                        ClientHost = m.ClientHost,
+                        ConsumerGroup = g.Group,
+                        Protocol = g.ProtocolType,
+                        GroupState = g.State,
+                        Source = "Kafka"
+                    }))
+                    .Cast<object>()
+                    .ToList();
+
+                _logger.LogInformation("Found {Count} Kafka consumer group members", kafkaConsumers.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching Kafka consumers");
+            }
+        }
+
+        // Combine both sources if hybrid mode
+        if (_queueMode.EnableHybridMode)
+        {
+            var combined = inMemoryConsumers.Concat(kafkaConsumers).ToList();
+            return Ok(new
+            {
+                Mode = _queueMode.GetMode(),
+                InMemoryConsumers = inMemoryConsumers,
+                KafkaConsumers = kafkaConsumers,
+                Combined = combined,
+                Summary = new
+                {
+                    TotalConsumers = combined.Count,
+                    InMemoryCount = inMemoryConsumers.Count,
+                    KafkaCount = kafkaConsumers.Count
+                }
             });
-        return Ok(consumers);
+        }
+
+        // Return only the active source
+        if (_queueMode.UseKafka)
+        {
+            return Ok(new
+            {
+                Mode = _queueMode.GetMode(),
+                Consumers = kafkaConsumers,
+                Summary = new { TotalConsumers = kafkaConsumers.Count },
+                Note = "Kafka consumers are shown as active members of consumer groups"
+            });
+        }
+
+        return Ok(new
+        {
+            Mode = _queueMode.GetMode(),
+            Consumers = inMemoryConsumers,
+            Summary = new { TotalConsumers = inMemoryConsumers.Count }
+        });
     }
 
     [HttpGet("{consumerId}")]
