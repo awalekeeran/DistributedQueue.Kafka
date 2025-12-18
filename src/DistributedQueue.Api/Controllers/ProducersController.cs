@@ -85,14 +85,7 @@ public class ProducersController : ControllerBase
         {
             try
             {
-                var adminConfig = new AdminClientConfig
-                {
-                    BootstrapServers = _kafkaSettings.BootstrapServers,
-                    SecurityProtocol = Enum.Parse<SecurityProtocol>(_kafkaSettings.SecurityProtocol),
-                    SaslMechanism = Enum.Parse<SaslMechanism>(_kafkaSettings.SaslMechanism),
-                    SaslUsername = _kafkaSettings.SaslUsername,
-                    SaslPassword = _kafkaSettings.SaslPassword
-                };
+                var adminConfig = _kafkaSettings.GetAdminClientConfig();
 
                 using var adminClient = new AdminClientBuilder(adminConfig).Build();
                 var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));

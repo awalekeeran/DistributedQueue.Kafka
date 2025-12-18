@@ -55,16 +55,7 @@ public class KafkaTestController : ControllerBase
         results.Add("🔌 Testing Admin Connection (Metadata Query)...");
         try
         {
-            var adminConfig = new AdminClientConfig
-            {
-                BootstrapServers = _kafkaSettings.BootstrapServers,
-                SecurityProtocol = Enum.Parse<Confluent.Kafka.SecurityProtocol>(_kafkaSettings.SecurityProtocol),
-                SaslMechanism = Enum.Parse<Confluent.Kafka.SaslMechanism>(_kafkaSettings.SaslMechanism),
-                SaslUsername = _kafkaSettings.SaslUsername,
-                SaslPassword = _kafkaSettings.SaslPassword,
-                SocketTimeoutMs = 30000,
-                ApiVersionRequest = true
-            };
+            var adminConfig = _kafkaSettings.GetAdminClientConfig();
 
             using var adminClient = new AdminClientBuilder(adminConfig).Build();
             
@@ -148,14 +139,7 @@ public class KafkaTestController : ControllerBase
         
         try
         {
-            var adminConfig = new AdminClientConfig
-            {
-                BootstrapServers = _kafkaSettings.BootstrapServers,
-                SecurityProtocol = Enum.Parse<Confluent.Kafka.SecurityProtocol>(_kafkaSettings.SecurityProtocol),
-                SaslMechanism = Enum.Parse<Confluent.Kafka.SaslMechanism>(_kafkaSettings.SaslMechanism),
-                SaslUsername = _kafkaSettings.SaslUsername,
-                SaslPassword = _kafkaSettings.SaslPassword
-            };
+            var adminConfig = _kafkaSettings.GetAdminClientConfig();
 
             using var adminClient = new AdminClientBuilder(adminConfig).Build();
             
