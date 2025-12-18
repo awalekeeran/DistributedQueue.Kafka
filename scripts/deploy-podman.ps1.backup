@@ -1,26 +1,8 @@
-<#
-.SYNOPSIS
-    Deploy DistributedQueue API to Podman Desktop
-.DESCRIPTION
-    Builds and runs the DistributedQueue API container using Podman Desktop (docker-compose compatible)
-.PARAMETER Build
-    Force rebuild of the container image
-.PARAMETER Stop
-    Stop and remove existing containers
-.PARAMETER Logs
-    Show container logs after deployment
-.EXAMPLE
-    .\deploy-podman.ps1
-    Deploy using existing .env configuration
-.EXAMPLE
-    .\deploy-podman.ps1 -Build
-    Rebuild and deploy
-.EXAMPLE
-    .\deploy-podman.ps1 -Stop
-    Stop and remove containers
-#>
-
 param(
+    [Parameter()]
+    [ValidateSet("InMemory", "Kafka", "Hybrid")]
+    [string]$Mode = "InMemory",
+    
     [Parameter()]
     [switch]$Build,
     
@@ -178,6 +160,9 @@ try {
     Write-Host "http://localhost:8080/swagger" -ForegroundColor White
     Write-Host "📍 Health Check: " -NoNewline -ForegroundColor Cyan
     Write-Host "http://localhost:8080/health" -ForegroundColor White
+    Write-Host ""
+    Write-Host "🔧 Mode: " -NoNewline -ForegroundColor Cyan
+    Write-Host $Mode -ForegroundColor White
     Write-Host ""
     Write-Host "📝 Useful Commands:" -ForegroundColor Cyan
     Write-Host "  View logs:    $composeCmd logs -f" -ForegroundColor Gray

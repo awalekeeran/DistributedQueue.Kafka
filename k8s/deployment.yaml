@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: distributedqueue-api
+  labels:
+    app: distributedqueue-api
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: distributedqueue-api
+  template:
+    metadata:
+      labels:
+        app: distributedqueue-api
+        version: v1
+    spec:
+      containers:
+      - name: api
+        image: distributedqueue-api:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: ASPNETCORE_URLS
+          value: "http://+:8080"
+        # Queue Mode Configuration - Default to InMemory
+        - name: QueueMode__UseInMemory
+          valueFrom:
+            configMapKeyRef:
+              name: distributedqueue-config
+              key: queue-mode-use-inmemory
+        - name: QueueMode__UseKafka
+          valueFrom:
+            configMapKeyRef:
+              name: distributedqueue-config
+              key: queue-mode-use-kafka
+        - name: QueueMode__EnableHybridMode
+          valueFrom:
+            configMapKeyRef:
+              name: distributedqueue-config
+              key: queue-mode-enable-hybrid
+        # Kafka Settings (optional - only if using Kafka mode)
+        - name: KafkaSettings__Enabled
+          valueFrom:
+            configMapKeyRef:
+              name: distributedqueue-config
+              key: kafka-enabled
+        - name: KafkaSettings__BootstrapServers
+          valueFrom:
+            secretKeyRef:
+              name: kafka-credentials
+              key: bootstrap-servers
+              optional: true
+        - name: KafkaSettings__SaslUsername
+          valueFrom:
+            secretKeyRef:
+              name: kafka-credentials
+              key: sasl-username
+              optional: true
+        - name: KafkaSettings__SaslPassword
+          valueFrom:
+            secretKeyRef:
+              name: kafka-credentials
+              key: sasl-password
+              optional: true
+        - name: KafkaSettings__SecurityProtocol
+          value: "SASL_SSL"
+        - name: KafkaSettings__SaslMechanism
+          value: "PLAIN"
+        - name: KafkaSettings__GroupId
+          value: "distributed-queue-consumer-group"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: distributedqueue-api
+  labels:
+    app: distributedqueue-api
+spec:
+  type: LoadBalancer
+  selector:
+    app: distributedqueue-api
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http

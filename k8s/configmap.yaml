@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: distributedqueue-config
+  labels:
+    app: distributedqueue-api
+data:
+  # Queue Mode Configuration
+  # InMemory Mode (Default - No Kafka required)
+  queue-mode-use-inmemory: "true"
+  queue-mode-use-kafka: "false"
+  queue-mode-enable-hybrid: "false"
+  kafka-enabled: "false"
+  
+  # To enable Kafka mode, change to:
+  # queue-mode-use-inmemory: "false"
+  # queue-mode-use-kafka: "true"
+  # kafka-enabled: "true"
+  
+  # To enable Hybrid mode, change to:
+  # queue-mode-use-inmemory: "true"
+  # queue-mode-use-kafka: "true"
+  # queue-mode-enable-hybrid: "true"
+  # kafka-enabled: "true"
