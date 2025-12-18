@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   distributedqueue-api:
     build:
@@ -14,6 +12,10 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
+      # SSL/TLS Certificate paths for librdkafka
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+      - SSL_CERT_DIR=/etc/ssl/certs
+      - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     networks:
       - distributedqueue-network
     restart: unless-stopped
