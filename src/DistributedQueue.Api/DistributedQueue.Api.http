@@ -1,6 +1,278 @@
-@DistributedQueue.Api_HostAddress = http://localhost:5297
+@baseUrl = http://localhost:8080
+@contentType = application/json
 
-GET {{DistributedQueue.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+###############################################################################
+# TOPICS API
+###############################################################################
+
+### Get All Topics
+GET {{baseUrl}}/api/topics
+Accept: {{contentType}}
+
+### Create Topic
+POST {{baseUrl}}/api/topics
+Content-Type: {{contentType}}
+
+{
+  "topicName": "orders-topic",
+  "description": "Topic for order events"
+}
+
+### Get Topic Details
+GET {{baseUrl}}/api/topics/orders-topic
+Accept: {{contentType}}
+
+### Delete Topic
+DELETE {{baseUrl}}/api/topics/orders-topic
+Accept: {{contentType}}
+
+###############################################################################
+# PRODUCERS API
+###############################################################################
+
+### Get All Producers
+GET {{baseUrl}}/api/producers
+Accept: {{contentType}}
+
+### Create Producer
+POST {{baseUrl}}/api/producers
+Content-Type: {{contentType}}
+
+{
+  "producerName": "order-producer",
+  "topicName": "orders-topic"
+}
+
+### Get Producer Details
+GET {{baseUrl}}/api/producers/order-producer
+Accept: {{contentType}}
+
+### Delete Producer
+DELETE {{baseUrl}}/api/producers/order-producer
+Accept: {{contentType}}
+
+###############################################################################
+# CONSUMERS API
+###############################################################################
+
+### Get All Consumers
+GET {{baseUrl}}/api/consumers
+Accept: {{contentType}}
+
+### Create Consumer
+POST {{baseUrl}}/api/consumers
+Content-Type: {{contentType}}
+
+{
+  "consumerName": "order-consumer",
+  "topicName": "orders-topic",
+  "groupId": "order-processing-group"
+}
+
+### Get Consumer Details
+GET {{baseUrl}}/api/consumers/order-consumer
+Accept: {{contentType}}
+
+### Delete Consumer
+DELETE {{baseUrl}}/api/consumers/order-consumer
+Accept: {{contentType}}
+
+###############################################################################
+# CONSUMER GROUPS API
+###############################################################################
+
+### Get All Consumer Groups
+GET {{baseUrl}}/api/consumergroups
+Accept: {{contentType}}
+
+### Create Consumer Group
+POST {{baseUrl}}/api/consumergroups
+Content-Type: {{contentType}}
+
+{
+  "groupName": "order-processing-group",
+  "description": "Group for processing order events"
+}
+
+### Get Consumer Group Details
+GET {{baseUrl}}/api/consumergroups/order-processing-group
+Accept: {{contentType}}
+
+### Delete Consumer Group
+DELETE {{baseUrl}}/api/consumergroups/order-processing-group
+Accept: {{contentType}}
+
+###############################################################################
+# MESSAGES API
+###############################################################################
+
+### Publish Message
+POST {{baseUrl}}/api/messages
+Content-Type: {{contentType}}
+
+{
+  "topicName": "orders-topic",
+  "key": "order-123",
+  "value": "{ \"orderId\": \"123\", \"customerId\": \"456\", \"amount\": 99.99, \"status\": \"pending\" }",
+  "headers": {
+    "correlation-id": "abc-123-def",
+    "source": "api"
+  }
+}
+
+### Publish Multiple Messages (Batch)
+POST {{baseUrl}}/api/messages/batch
+Content-Type: {{contentType}}
+
+{
+  "topicName": "orders-topic",
+  "messages": [
+    {
+      "key": "order-124",
+      "value": "{ \"orderId\": \"124\", \"customerId\": \"457\", \"amount\": 149.99, \"status\": \"pending\" }",
+      "headers": {
+        "correlation-id": "abc-124-def",
+        "source": "api"
+      }
+    },
+    {
+      "key": "order-125",
+      "value": "{ \"orderId\": \"125\", \"customerId\": \"458\", \"amount\": 79.99, \"status\": \"pending\" }",
+      "headers": {
+        "correlation-id": "abc-125-def",
+        "source": "api"
+      }
+    }
+  ]
+}
+
+### Get Messages from Topic (Latest)
+GET {{baseUrl}}/api/messages?topicName=orders-topic&limit=10
+Accept: {{contentType}}
+
+### Get Messages from Topic (Earliest - from beginning)
+GET {{baseUrl}}/api/messages?topicName=orders-topic&limit=10&offset=earliest
+Accept: {{contentType}}
+
+### Get Messages with Specific Limit
+GET {{baseUrl}}/api/messages?topicName=orders-topic&limit=50
+Accept: {{contentType}}
+
+###############################################################################
+# KAFKA TEST API (Diagnostics)
+###############################################################################
+
+### Test Kafka Connection
+POST {{baseUrl}}/api/kafkatest/test-connection
+Accept: {{contentType}}
+
+### Create Test Topic
+POST {{baseUrl}}/api/kafkatest/create-test-topic?topicName=test-topic-dotnet
+Accept: {{contentType}}
+
+### Send Test Message
+POST {{baseUrl}}/api/kafkatest/send-test-message
+Content-Type: {{contentType}}
+
+{
+  "topicName": "test-topic-dotnet",
+  "message": "Hello from Distributed Queue API!"
+}
+
+###############################################################################
+# HEALTH CHECK
+###############################################################################
+
+### Health Check
+GET {{baseUrl}}/health
+Accept: {{contentType}}
+
+###############################################################################
+# EXAMPLE WORKFLOWS
+###############################################################################
+
+### WORKFLOW 1: Complete Message Publishing Flow
+# 1. Create topic
+# 2. Publish message
+# 3. Get messages
+
+### Step 1: Create a new topic
+POST {{baseUrl}}/api/topics
+Content-Type: {{contentType}}
+
+{
+  "topicName": "user-events",
+  "description": "User activity events"
+}
+
+### Step 2: Publish a message to the topic
+POST {{baseUrl}}/api/messages
+Content-Type: {{contentType}}
+
+{
+  "topicName": "user-events",
+  "key": "user-001",
+  "value": "{ \"userId\": \"001\", \"action\": \"login\", \"timestamp\": \"2025-12-18T22:00:00Z\" }",
+  "headers": {
+    "event-type": "user-login",
+    "source": "web-app"
+  }
+}
+
+### Step 3: Retrieve messages from the topic
+GET {{baseUrl}}/api/messages?topicName=user-events&limit=10&offset=earliest
+Accept: {{contentType}}
+
+###
+
+### WORKFLOW 2: Consumer Group Setup
+# 1. Create consumer group
+# 2. Create consumer
+# 3. Get consumer group details
+
+### Step 1: Create consumer group
+POST {{baseUrl}}/api/consumergroups
+Content-Type: {{contentType}}
+
+{
+  "groupName": "user-events-processors",
+  "description": "Processes user events"
+}
+
+### Step 2: Create consumer
+POST {{baseUrl}}/api/consumers
+Content-Type: {{contentType}}
+
+{
+  "consumerName": "user-event-consumer-1",
+  "topicName": "user-events",
+  "groupId": "user-events-processors"
+}
+
+### Step 3: Get consumer group details
+GET {{baseUrl}}/api/consumergroups/user-events-processors
+Accept: {{contentType}}
+
+###
+
+### WORKFLOW 3: Kafka Diagnostics
+# Test connection and create test resources
+
+### Step 1: Test Kafka connection
+POST {{baseUrl}}/api/kafkatest/test-connection
+Accept: {{contentType}}
+
+### Step 2: Create test topic
+POST {{baseUrl}}/api/kafkatest/create-test-topic?topicName=diagnostic-test
+Accept: {{contentType}}
+
+### Step 3: Send test message
+POST {{baseUrl}}/api/kafkatest/send-test-message
+Content-Type: {{contentType}}
+
+{
+  "topicName": "diagnostic-test",
+  "message": "Diagnostic test message - connection successful!"
+}
 
 ###
